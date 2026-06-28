@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Apply Airpi AP3000M MMC EEPROM WiFi fix v2"
+echo "Apply Airpi AP3000M MMC EEPROM WiFi fix v3"
 
 WRT="${GITHUB_WORKSPACE:-$(pwd)}/wrt"
 [ -d "$WRT" ] || WRT="/mnt/build_wrt"
@@ -71,13 +71,18 @@ def replace_dts_node(text, node_name, new_block):
 
     return text[:pos] + new_block + text[end:]
 
-# 1. DTS: remove static mediatek,eeprom-data and bind real MMC factory EEPROM
+def strip_c_comments(text):
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    text = re.sub(r'//.*', '', text)
+    return text
+
+# 1. DTS: replace whole &wifi node
 s = dts.read_text()
 
 wifi_block = '''&wifi {
     /*
      * Airpi AP3000M: use real EEPROM from eMMC factory nvmem cell.
-     * Static mediatek,eeprom-data is removed to avoid wrong 2.4G/5G MAC.
+     * Avoid static embedded EEPROM data that may cause wrong 2.4G/5G MAC.
      */
     nvmem-cells = <&eeprom_factory_0>;
     nvmem-cell-names = "eeprom";
@@ -90,12 +95,14 @@ s = replace_dts_node(s, "&wifi", wifi_block)
 m = re.search(r'&wifi\s*\{.*?\n\};', s, re.S)
 if not m:
     raise SystemExit("ERROR: &wifi block missing after patch")
-if "mediatek,eeprom-data" in m.group(0):
-    raise SystemExit("ERROR: mediatek,eeprom-data still active in &wifi")
+
+active_wifi = strip_c_comments(m.group(0))
+if "mediatek,eeprom-data" in active_wifi:
+    raise SystemExit("ERROR: active mediatek,eeprom-data still exists in &wifi")
 
 dts.write_text(s)
 
-# 2. WiFi MAC hotplug: read 2.4G/5G MAC from MMC factory offsets
+# 2. ieee80211 hotplug: read 2.4G/5G MAC from MMC factory offsets
 s = wifimac.read_text()
 
 block = '''    airpi,ap3000m)
@@ -133,8 +140,24 @@ echo "== Verify DTS =="
 grep -nA10 -B3 'nvmem-cells\|nvmem-cell-names\|mediatek,eeprom-data\|&wifi' "$DTS" || true
 
 echo
+echo "== Active static EEPROM check =="
+python3 - "$DTS" <<'PY'
+from pathlib import Path
+import re, sys
+s = Path(sys.argv[1]).read_text()
+m = re.search(r'&wifi\s*\{.*?\n\};', s, re.S)
+if not m:
+    raise SystemExit("ERROR: &wifi block missing")
+block = re.sub(r'/\*.*?\*/', '', m.group(0), flags=re.S)
+block = re.sub(r'//.*', '', block)
+if "mediatek,eeprom-data" in block:
+    raise SystemExit("ERROR: active static EEPROM data still exists")
+print("OK: no active static EEPROM data in &wifi")
+PY
+
+echo
 echo "== Verify WiFi MAC =="
 grep -nA20 -B3 'airpi,ap3000m)' "$WIFIMAC" || true
 
 echo
-echo "Airpi AP3000M MMC EEPROM WiFi fix v2 applied."
+echo "Airpi AP3000M MMC EEPROM WiFi fix v3 applied."
