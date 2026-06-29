@@ -194,8 +194,8 @@ jobs:
 
           make defconfig -j$(nproc) && make clean -j$(nproc)
 
-      - name: Apply Airpi AP3000M MMC EEPROM WiFi fix
-        run: bash $GITHUB_WORKSPACE/Scripts/airpi_ap3000m_mmc_eeprom_fix.sh
+      - name: Apply Airpi AP3000M WiFi EEPROM DTS fix v5
+        run: bash $GITHUB_WORKSPACE/Scripts/airpi_ap3000m_wifi_eeprom_dts_v5.sh
 
       - name: Download Packages
         if: env.WRT_TEST != 'true'
