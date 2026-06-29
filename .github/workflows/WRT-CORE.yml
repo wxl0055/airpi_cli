@@ -199,6 +199,9 @@ jobs:
       - name: Apply Airpi AP3000M WiFi BSSID fix v6.1-final
         run: bash $GITHUB_WORKSPACE/Scripts/airpi_ap3000m_wifi_bssid_fix_v6_1_final.sh
 
+      - name: Apply Airpi AP3000M QModem USB defaults
+        run: bash $GITHUB_WORKSPACE/Scripts/airpi_ap3000m_qmodem_usb_defaults.sh
+
       - name: Download Packages
         if: env.WRT_TEST != 'true'
         run: |
